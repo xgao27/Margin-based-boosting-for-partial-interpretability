@@ -4,11 +4,11 @@ import numpy as np
 import math
 import time
 
-from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import AdaBoostClassifier,GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
-from sklearn.model_selection import GridSearchCV 
+from sklearn.model_selection import GridSearchCV,cross_val_score,ShuffleSplit
 
 from sklearn import datasets
 from sklearn.model_selection import train_test_split,KFold
@@ -45,7 +45,9 @@ def printClassifierFeatures(f,print_weights=True):
         
 # get data ######################################################################################          
 def loadData(name,label_map=[0,1],label_ind = -1,exclude=[],ratio=0.25,max_row=-1):
-    df_all = pd.read_csv('./data/'+name)
+    if "/" not in name:
+        name = './data/'+name
+    df_all = pd.read_csv(name)
     # if zero_one:
     #     y = (df_all.values[:,label_ind]*2-1.0).astype(np.int64)
     # else:
@@ -58,16 +60,24 @@ def loadData(name,label_map=[0,1],label_ind = -1,exclude=[],ratio=0.25,max_row=-
     exclude.append(label_ind)
     X = np.delete(df_all.values, exclude, 1)
     if max_row>0:
-        X = X[:max_row]
-        y = y[:max_row]
+        perm = np.random.permutation(X.shape[0])
+        X = X[perm][:max_row]
+        y = y[perm][:max_row]
     
     print("--------- dataset summary: ---------")
     print(df_all.info())
-    # print (X.shape, y.shape)
-    # print (X[:5],y[:5])
+    print (X.shape, y.shape)
+    print (X[:5],y[:5])
     
     return X,y
-
+    
+def map_label(y,zero_one):
+    if zero_one == 0: # input [-1, 1], want [0,1] 
+        new_y = np.where(y==-1,0,y)
+    else: # input [0,1], want [-1, 1] 
+        new_y = np.where(y==0,-1,y)
+    return new_y
+    
 def generateData(shape,d,eta,noise_type=0,split=True,test_ratio=0.25,verbose=True):
     (m,D) = shape
     X = np.random.randint(0,2,shape).astype(np.float32) # 0, 1 binary data
@@ -397,16 +407,20 @@ def plot_margin_distribution(X_train,y_train,f,theta,name='f'):
     fig.set_figwidth(13)
     plt.show()
 
-
-def compute_error_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta):
+    
+def compute_error_ERROR_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta,blackbox):
     margins = []
     covers_train = []
     errors_train = []
+    ERRORS_train = []
     covers_test = []
     errors_test = []
+    ERRORS_test = []
     ref_used = False
     pred_train = weightedVote(g,X_train)
     pred_test = weightedVote(g,X_test)
+    pred_bb_train = blackbox.predict(X_train) 
+    pred_bb_test = blackbox.predict(X_test) 
     for i in range(0,k+1,1):
         theta = 1.0*i/k
         if ref_theta<=theta and ref_used == False:
@@ -416,6 +430,7 @@ def compute_error_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta):
     
     for theta in margins:
         ind = np.arange( y_train.shape[0])[np.abs(pred_train)>=theta]
+        u_ind = np.arange( y_train.shape[0])[np.abs(pred_train)<theta]
         c = ind.shape[0]*1.0/y_train.shape[0]
         covers_train.append(c)
         if c>0:
@@ -423,8 +438,12 @@ def compute_error_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta):
         else:
             error = 0
         errors_train.append(error)
+        ERROR = (np.sum(pred_train[ind]*y_train[ind] <= 0) + np.sum(pred_bb_train[u_ind]*y_train[u_ind] <= 0))*1.0/y_train.shape[0]
+        ERRORS_train.append(ERROR)
+        # print ("train ERROR:",ERROR,"k",theta,"error",error)
 
         ind = np.arange( y_test.shape[0])[np.abs(pred_test)>=theta]
+        u_ind = np.arange( y_test.shape[0])[np.abs(pred_test)<theta]
         c = ind.shape[0]*1.0/y_test.shape[0]
         
         covers_test.append(c)
@@ -433,15 +452,31 @@ def compute_error_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta):
         else:
             error = 0
         errors_test.append(error)
-    return np.stack([errors_train,covers_train,errors_test,covers_test,margins], axis=0)
+        ERROR = (np.sum(pred_test[ind]*y_test[ind] <= 0) + np.sum(pred_bb_test[u_ind]*y_test[u_ind] <= 0))*1.0/y_test.shape[0]
+        ERRORS_test.append(ERROR)
+    return np.stack([errors_train,ERRORS_train,covers_train,errors_test,ERRORS_test,covers_test,margins], axis=0)
     
 
-
-def plot_error_cover_by_margin(k_m_ee_cc,ref_theta,ref_error=None,title="Error and coverage VS margin (averaged over n_fold folds)",band=False,file_name=None):
-    colors = ['#1f89dc','#dc721f',"#079c94","#1f4e5f","#6b9998","#8cbed6","#000000","#ed872d"]
+def plot_ERROR_cover_by_margin(k_m_ee_cc,ref_theta,ref_error=None,title="Error and coverage VS margin (averaged over n_fold folds)",band=False,file_name=None):
+# ['k',  0
+# 'margin', 1
+# 'train_error_mean', 2
+# 'train_error_std', 3
+# 'train_ERROR_mean', 4
+# 'train_ERROR_std', 5
+# 'train_cover_mean', 6
+# 'train_cover_std', 7
+# 'test_error_mean', 8
+# 'test_error_std', 9
+# 'test_ERROR_mean', 10
+# 'test_ERROR_std', 11
+# 'test_cover_mean', 12
+# 'test_cover_std'] 13
+    colors = ['#1f89dc','#dc721f',"#7d3dad","#1f4e5f","#6b9998","#8cbed6","#000000","#ed872d"]
     margins = k_m_ee_cc[:,1] 
-    errors_mean = k_m_ee_cc[:,2+4] 
-    covers_mean = k_m_ee_cc[:,4+4] 
+    errors_mean = k_m_ee_cc[:,8] 
+    ERRORS_mean = k_m_ee_cc[:,10]
+    covers_mean = k_m_ee_cc[:,12] 
 
     height_width = (4,6)
     fig, ax1 = plt.subplots()
@@ -450,7 +485,8 @@ def plot_error_cover_by_margin(k_m_ee_cc,ref_theta,ref_error=None,title="Error a
     ls2 = "--"
     ls3 = ':'
     
-    ax1.plot(margins,errors_mean,c = colors[0],label='Error',linestyle=ls1)
+    ax1.plot(margins,errors_mean,c = colors[0],label='Interpretable Error',linestyle=ls1)
+    ax1.plot(margins,ERRORS_mean,c = colors[2],label='Overall Error',linestyle=ls1)
     ax2.plot(margins,covers_mean,c = colors[1],label='Coverage',linestyle=ls2)
     if ref_error is not None:
         error_bb_mean = np.mean(ref_error,axis=0)
@@ -478,8 +514,22 @@ def plot_error_cover_by_margin(k_m_ee_cc,ref_theta,ref_error=None,title="Error a
     fig.set_figwidth(height_width[1])
     if file_name!= None: plt.savefig('output/'+file_name+'.png')
     plt.show()
-
+    
 def plot_error_by_cover(k_m_ee_cc_list,labels,title="Error VS coverage (averaged over n_fold folds)",band=True,file_name=None,y_lim = False,color_ls=None):
+# ['k',  0
+# 'margin', 1
+# 'train_error_mean', 2
+# 'train_error_std', 3
+# 'train_ERROR_mean', 4
+# 'train_ERROR_std', 5
+# 'train_cover_mean', 6
+# 'train_cover_std', 7
+# 'test_error_mean', 8
+# 'test_error_std', 9
+# 'test_ERROR_mean', 10
+# 'test_ERROR_std', 11
+# 'test_cover_mean', 12
+# 'test_cover_std'] 13
     if color_ls is None:
         colors = ['#3498db','#1f618d',"#2e4053","#1f4e5f","#079c94","#6b9998","#000000"]
         ls = ['solid','dashed','dotted','dashdot','dashdotted','densely dashdotted']
@@ -491,12 +541,12 @@ def plot_error_by_cover(k_m_ee_cc_list,labels,title="Error VS coverage (averaged
     y_max = 0
     for i in range(len(k_m_ee_cc_list)):
         k_m_ee_cc = k_m_ee_cc_list[i]
-        errors_mean = k_m_ee_cc[:,2+4] 
-        covers_mean = k_m_ee_cc[:,4+4] 
+        errors_mean = k_m_ee_cc[:,8] #6
+        covers_mean = k_m_ee_cc[:,12] #8
         _y_max = errors_mean[0]
         ax.plot(covers_mean,errors_mean,c = colors[i],label=labels[i],linestyle=ls[i])
         if band: 
-            errors_std = k_m_ee_cc[:,3+4] 
+            errors_std = k_m_ee_cc[:,11] #7
             _y_max += errors_std[0]
             ax.fill_between(covers_mean, errors_mean - errors_std, errors_mean + errors_std, color=colors[i], alpha=0.2)
         if y_max<_y_max:

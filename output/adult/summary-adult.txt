@@ -1,0 +1,21 @@
+adult 21 rules coverage .896 error 0.165
+
+blackbox: 0.160 \pm 0.002
+
+bb_params = {'learning_rate': 0.1, 'max_depth': 3, 'n_estimators': 250}
+blackbox = GradientBoostingClassifier(**bb_params)
+
+k_list=[9,15,21]
+theta_list = [2.0/9,2.0/15,2.0/21]
+
+
+
+------------------------------  9 base learners cut-off margin 0.222222 averaged over 10 folds ------------------------------
+coverage: 0.641 \pm 0.032	 error on covered: 0.072 \pm 0.020	 blackbox (overall): 0.166 \pm 0.019	 f (overall): 0.169 \pm 0.016	 ERROR (pipeline): 0.167 \pm 0.018	 error (uncovered): 0.336 \pm 0.025
+
+------------------------------ 15 base learners cut-off margin 0.133333 averaged over 10 folds ------------------------------
+coverage: 0.715 \pm 0.034	 error on covered: 0.089 \pm 0.008	 blackbox (overall): 0.159 \pm 0.005	 f (overall): 0.166 \pm 0.004	 ERROR (pipeline): 0.160 \pm 0.005	 error (uncovered): 0.340 \pm 0.018
+
+------------------------------ 21 base learners cut-off margin 0.095238 averaged over 10 folds ------------------------------
+coverage: 0.803 \pm 0.043	 error on covered: 0.115 \pm 0.006	 blackbox (overall): 0.159 \pm 0.005	 f (overall): 0.166 \pm 0.004	 ERROR (pipeline): 0.162 \pm 0.005	 error (uncovered): 0.357 \pm 0.033
+
