@@ -7,6 +7,7 @@ import time
 from sklearn.ensemble import AdaBoostClassifier,GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
+import xgboost as xgb
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV,cross_val_score,ShuffleSplit
 
@@ -24,6 +25,9 @@ warnings.filterwarnings("ignore")
 def printTime():
     print("Latest excution of this block:", time.ctime(time.time()))
 
+def time_diff(t0):
+    return (time.time_ns()-t0)/1000000000
+
 def printClassifier(f,verbose = 0):
     print("----------------- classifier summary -----------------")
     if verbose>0:
@@ -40,7 +44,7 @@ def printClassifierFeatures(f,print_weights=True):
         features.append(np.argmax(f['h'][i].feature_importances_))
         weights.append(f['a'][i])
     print("----------------- classifier summary -----------------")
-    print(features)
+    print("features: ",features)
     if print_weights: print(weights)
         
 # get data ######################################################################################          
@@ -407,6 +411,44 @@ def plot_margin_distribution(X_train,y_train,f,theta,name='f'):
     fig.set_figwidth(13)
     plt.show()
 
+
+def compute_error_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta):
+    margins = []
+    covers_train = []
+    errors_train = []
+    covers_test = []
+    errors_test = []
+    ref_used = False
+    pred_train = weightedVote(g,X_train)
+    pred_test = weightedVote(g,X_test)
+    for i in range(0,k+1,1):
+        theta = 1.0*i/k
+        if ref_theta<=theta and ref_used == False:
+            margins.append(ref_theta)
+            ref_used = True
+        if(ref_theta!= theta): margins.append(theta)
+    
+    for theta in margins:
+        ind = np.arange( y_train.shape[0])[np.abs(pred_train)>=theta]
+        c = ind.shape[0]*1.0/y_train.shape[0]
+        covers_train.append(c)
+        if c>0:
+            error = np.sum(pred_train[ind]*y_train[ind] <= 0)*1.0/ind.shape[0]
+        else:
+            error = 0
+        errors_train.append(error)
+
+        ind = np.arange( y_test.shape[0])[np.abs(pred_test)>=theta]
+        c = ind.shape[0]*1.0/y_test.shape[0]
+        
+        covers_test.append(c)
+        if c>0:
+            error = np.sum(pred_test[ind]*y_test[ind] <= 0)*1.0/ind.shape[0]
+        else:
+            error = 0
+        errors_test.append(error)
+    return np.stack([errors_train,covers_train,errors_test,covers_test,margins], axis=0)
+
     
 def compute_error_ERROR_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta,blackbox):
     margins = []
@@ -456,6 +498,48 @@ def compute_error_ERROR_cover_margin(X_train,y_train,X_test,y_test,g,k,ref_theta
         ERRORS_test.append(ERROR)
     return np.stack([errors_train,ERRORS_train,covers_train,errors_test,ERRORS_test,covers_test,margins], axis=0)
     
+
+def plot_error_cover_by_margin(k_m_ee_cc,ref_theta,ref_error=None,title="Error and coverage VS margin (averaged over n_fold folds)",band=False,file_name=None):
+    colors = ['#1f89dc','#dc721f',"#079c94","#1f4e5f","#6b9998","#8cbed6","#000000","#ed872d"]
+    margins = k_m_ee_cc[:,1] 
+    errors_mean = k_m_ee_cc[:,2+4] 
+    covers_mean = k_m_ee_cc[:,4+4] 
+
+    height_width = (4,6)
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    ls1 = "-"
+    ls2 = "--"
+    ls3 = ':'
+    
+    ax1.plot(margins,errors_mean,c = colors[0],label='Error',linestyle=ls1)
+    ax2.plot(margins,covers_mean,c = colors[1],label='Coverage',linestyle=ls2)
+    if ref_error is not None:
+        error_bb_mean = np.mean(ref_error,axis=0)
+        # error_bb_std = np.std(ref_error,axis=0)
+        ax1.hlines(error_bb_mean,margins[0],margins[-1], linestyles=ls3,colors=['#000000'], label='Blackbox error')
+
+    ax2.vlines(ref_theta,0,1, linestyles=ls3,colors=['#1FC11F'], label='Cut-off margin')
+    if band: 
+        errors_std = k_m_ee_cc[:,3+4]
+        covers_std = k_m_ee_cc[:,5+4]
+        ax1.fill_between(margins, errors_mean - errors_std, errors_mean + errors_std, color=colors[0], alpha=0.2)   
+        ax2.fill_between(margins, covers_mean - covers_std, covers_mean + covers_std, color=colors[1], alpha=0.2)   
+
+    ax1.legend(loc=3)
+    ax2.legend(loc=1)
+    ax1.set_title(title, loc = 'left')
+    ax1.set_xlabel("Cut-off margin")
+    ax1.set_ylabel("Error")
+    ax2.set_ylabel("Coverage")
+    
+    # ax1.set_ylim([0,1.2*np.max(errors_mean)])
+    # ax2.set_ylim([0,1.0])
+    
+    fig.set_figheight(height_width[0])
+    fig.set_figwidth(height_width[1])
+    if file_name!= None: plt.savefig('output/'+file_name+'.png')
+    plt.show()
 
 def plot_ERROR_cover_by_margin(k_m_ee_cc,ref_theta,ref_error=None,title="Error and coverage VS margin (averaged over n_fold folds)",band=False,file_name=None):
 # ['k',  0
