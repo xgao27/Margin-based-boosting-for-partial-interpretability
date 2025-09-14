@@ -11,15 +11,16 @@ theta_list = [2.0/9,2.0/15,2.0/21]
 
 ------------------------------  9 base learners cut-off margin 0.222222 averaged over 10 folds ------------------------------
 coverage: 0.619 \pm 0.042	 error on covered: 0.076 \pm 0.008	 blackbox (overall): 0.159 \pm 0.005	 f (overall): 0.166 \pm 0.004	 ERROR (pipeline): 0.162 \pm 0.005	 error (uncovered): 0.303 \pm 0.021
-time to train f: 0.581 \pm 0.017	 time to sparsify g: 10.490 \pm 0.179 	 X_train shape (29305, 36)
+time to train f: 0.588 \pm 0.016	 time to sparsify g: 10.547 \pm 0.224 	 time to train bb: 3.068 \pm 0.026 	 X_train shape (29305, 36)
+
 
 ------------------------------ 15 base learners cut-off margin 0.133333 averaged over 10 folds ------------------------------
 coverage: 0.715 \pm 0.034	 error on covered: 0.089 \pm 0.008	 blackbox (overall): 0.159 \pm 0.005	 f (overall): 0.166 \pm 0.004	 ERROR (pipeline): 0.160 \pm 0.005	 error (uncovered): 0.340 \pm 0.018
-time to train f: 0.584 \pm 0.015	 time to sparsify g: 24.781 \pm 0.385 	 X_train shape (29305, 36)
+time to train f: 0.591 \pm 0.007	 time to sparsify g: 24.640 \pm 0.289 	 time to train bb: 3.131 \pm 0.178 	 X_train shape (29305, 36)
 
 
 ------------------------------ 21 base learners cut-off margin 0.095238 averaged over 10 folds ------------------------------
 coverage: 0.803 \pm 0.043	 error on covered: 0.115 \pm 0.006	 blackbox (overall): 0.159 \pm 0.005	 f (overall): 0.166 \pm 0.004	 ERROR (pipeline): 0.162 \pm 0.005	 error (uncovered): 0.357 \pm 0.033
-time to train f: 0.597 \pm 0.006	 time to sparsify g: 44.881 \pm 0.285 	 X_train shape (29305, 36)
+time to train f: 0.591 \pm 0.011	 time to sparsify g: 44.700 \pm 0.276 	 time to train bb: 3.052 \pm 0.037 	 X_train shape (29305, 36)
 
 
